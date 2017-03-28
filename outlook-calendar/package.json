@@ -1,0 +1,19 @@
+{
+  "name": "Bob",
+  "version": "1.0.0",
+  "description": "```sh $ docker run -p 8400:8400 -p 8500:8500 -p 8600:53/udp -h node1 progrium/consul -server -bootstrap ```",
+  "main": "outlook-calendar-service.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "color": "^1.0.3",
+    "express": "^4.15.2",
+    "seneca": "^3.3.0",
+    "seneca-balance-client": "^0.6.0",
+    "seneca-consul-registry": "^0.1.0",
+    "seneca-mesh": "^0.10.0"
+  }
+}

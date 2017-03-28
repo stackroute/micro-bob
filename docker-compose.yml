@@ -1,0 +1,95 @@
+version: '2'
+services:
+  consul:
+    image: progrium/consul
+    command: -server -bootstrap -ui-dir /ui
+    ports:
+      - 8400:8400
+      - 8500:8500
+      - 8600:53/udp
+    networks:
+      - n3
+  redis:
+    image: redis:latest
+    restart: always
+    networks:
+      - n3
+    ports:
+      - 6379:6379      
+  mongodb:
+    image: mongo:latest
+    restart: always
+    networks:
+      - n3
+    ports:
+      - 27017:27017
+  base:
+    image: mesh-base
+    build: base
+    networks:
+      - n3
+    links:
+      - consul
+  bob:
+    image: mesh-bob
+    build: bob
+    depends_on:
+      - base
+      - mongodb
+      - redis
+    networks:
+      - n3
+    links:
+      - consul
+    ports:
+      - 8000:8000
+  monitor:
+    image: mesh-monitor
+    build: monitor
+    depends_on:
+      - base
+    networks:
+      - n3
+    links:
+      - consul
+  google-calendar:
+    image: mesh-google-calendar
+    build: google-calendar
+    depends_on:
+      - base
+    networks:
+      - n3
+    links:
+      - consul
+  google-information:
+    image: mesh-google-information
+    build: google-information
+    depends_on:
+      - base
+      - google-calendar
+    networks:
+      - n3
+    links:
+      - consul  
+  outlook-calendar:
+    image: mesh-outlook-calendar
+    build: outlook-calendar
+    depends_on:
+      - base
+    networks:
+      - n3
+    links:
+      - consul
+  outlook-information:
+    image: mesh-outlook-information
+    build: outlook-information
+    depends_on:
+      - base
+      - outlook-calendar
+    networks:
+      - n3
+    links:
+      - consul
+networks:
+  n3:
+    driver: bridge
