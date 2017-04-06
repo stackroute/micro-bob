@@ -18,22 +18,23 @@ import Dropzone from "react-dropzone";
 import sha1 from "sha1";
 import superagent from "superagent";
 import Mood from 'material-ui/svg-icons/social/mood';
-
+import Datetime from 'react-datetime';
 const keyMap={
-  'openAllEMojis' : ['ctrl+z']
+  'openAllEMojis' : ['ctrl+shift+k']
  };
 export default class NewMessage extends Component {
 	constructor(props,context){
 		super(props,context);
 		this.state = {
-			userInput:"",
+			userInput:"",			
+			reminderDialog:false,
 			open: false,
 			open1: false,
 			open2:false,
 			summary:'',
 	        location:'',
-	        startDate:'',
-	        endDate:'',
+	        startTime:'',
+	        duration:'',
 			username:'',
 			eventurl:'',
 			dialogStatus:false,
@@ -42,31 +43,33 @@ export default class NewMessage extends Component {
 		};
 		this.handleOpen=this.handleOpen.bind(this);
 		this.handleClose=this.handleClose.bind(this);
-		this.handleSubmit=this.handleSubmit.bind(this);
+		// this.handleSubmit=this.handleSubmit.bind(this);
 		this.handleOpen1=this.handleOpen1.bind(this);
 		this.handleClose1=this.handleClose1.bind(this);
 		this.handleSubmit1=this.handleSubmit1.bind(this);
 		this.handleClose2=this.handleClose2.bind(this);
 		this.handleChangeSummary=this.handleChangeSummary.bind(this);
 		this.handleChangeLocation=this.handleChangeLocation.bind(this);
-		this.handleChangeStartDate=this.handleChangeStartDate.bind(this);
-		this.handleChangeEndDate=this.handleChangeEndDate.bind(this);
+		this.handleChangeStartTime=this.handleChangeStartTime.bind(this);
+		this.handleChangeDuration=this.handleChangeDuration.bind(this);
 		this.handleClickEmoOpen=this.handleClickEmoOpen.bind(this);
 		this.handleClickEmoClose=this.handleClickEmoClose.bind(this);
 		this.handleOpenShortcuts=this.handleOpenShortcuts.bind(this);
         this.handleCloseShortcuts=this.handleCloseShortcuts.bind(this);
+        this.handleReminderEvent=this.handleReminderEvent.bind(this);
  		this.handleKeyDown=this.handleKeyDown.bind(this);
 	}
 
 	componentDidMount(){
 		this.state.localEmitter.on('openShortcutComponent',this.handleOpenShortcuts)
 		let that=this;
+		that.props.psocket.on('setReminder', this.handleReminderEvent);
 		that.props.psocket.on('confirmSetRemainder', function(result, summary, location){
 			//console.log("confirmSetRemainderResult: ", result);
 			that.setState({open: true, summary: summary, location:location});
 		});
-		that.props.psocket.on('noToken', function(username, summary, location, sd, ed){
-			that.setState({open1: true, username:username, summary: summary, location:location, startDate:sd, endDate:ed});
+		that.props.psocket.on('noToken', function(username, summary, location, sd, duration){
+			that.setState({open1: true, username:username, summary: summary, location:location, startTime:sd, duration:duration});
 			//console.log('inside 2nd dialog box : ', that.state.open1);
 		});
 		that.props.psocket.on('tokenRec', function(token){
@@ -78,17 +81,39 @@ export default class NewMessage extends Component {
 		});
 	}
 
+	handleReminderEvent(entities){
+		entities.map((item,i)=>{
+			console.log("kjjkjksd",item.subject,item.location,item.starttime,item.duration)
+			if(Object.keys(item)[0]==='subject')
+				this.setState({summary:item.subject});
+			if(Object.keys(item)[0]==='location')
+				this.setState({location:item.location});
+			if(Object.keys(item)[0]==='starttime')
+				this.setState({startTime:item.starttime});
+			if(Object.keys(item)[0]==='duration')
+				this.setState({duration:item.duration});
+		})
+		this.setState({reminderDialog: true});		
+	}
+
 	handleOpen(){
 		this.setState({open: true});
 	}
+
+	handleCloseReminderDialog(){
+    	this.setState({reminderDialog: false});
+    	this.props.psocket.emit('reminderAccepted', this.props.name, "","","","");
+	
+    }
 
     handleClose(){
     	this.setState({open: false});
     }
 
-	handleSubmit(){
-		this.setState({open: false});
-		this.props.psocket.emit('remainderAccepted', this.props.name, this.state.summary, this.state.location, this.state.startDate, this.state.endDate);
+    handleSubmitReminder(){
+		this.setState({reminderDialog: false});
+		this.props.psocket.emit('reminderAccepted', this.props.name, this.state.summary, this.state.location, this.state.startTime, this.state.duration);
+		this.setState({location:'',summary:'',duration:''})
 	}
 
 	handleOpen1(){
@@ -128,15 +153,15 @@ export default class NewMessage extends Component {
 		this.setState({userInput: tempInput});
 	}
 
-	handleChangeStartDate(e,date){
+	handleChangeStartTime(val){
 		this.setState({
-			startDate:date
+			startTime:val._d
 		})
 	}
 
-	handleChangeEndDate(e,date){
+	handleChangeDuration(e){
 		this.setState({
-			endDate:date
+			duration:e.target.value
 		})
 	}
 
@@ -157,36 +182,37 @@ export default class NewMessage extends Component {
 		this.setState({userInput:e.target.value});
 	}
 
-	handleKeyDown(event){
-        if(!event.shiftKey && event.key==='Enter'){
+	
+    handleKeyDown(event){
+	    if(!event.shiftKey && event.key === 'Enter'){
 
-           if(this.state.userInput!==""&&this.props.channelId.split("#")[1]!="Bob-Bot")
-            {
-                this.props.psocket.emit("send message",this.props.name,this.props.channelId, this.state.userInput);
-                this.setState({userInput:""},
-                    function(){
-                        this.setState({multiLineMessage: false},
-                            function(){
-                                this.setState({multiLineMessage: true})
-                            }
-                        );
-                    }
-                );            
-            }
-            else if(this.state.userInput!==""&&this.props.channelId.split("#")[1]=="Bob-Bot"){
-                    this.props.psocket.emit("BotMessage",this.props.name,this.props.channelId,this.state.userInput);
-                    this.setState({userInput:""},function(){
-                        this.setState({multiLineMessage: false},
-                            function(){
-                                this.setState({multiLineMessage: true})
-                            }
-                        );
-                    });
-                    console.log("You have sent message in Bot channel");
-            }
-        }
+	       if(this.state.userInput!==""&&this.props.channelId.split("#")[1]!="Bob-Bot")
+	        {
+	            this.props.psocket.emit("send message",this.props.name,this.props.channelId, this.state.userInput);
+	            this.setState({userInput:""},
+	                function(){
+	                    this.setState({multiLineMessage: false},
+	                        function(){
+	                            this.setState({multiLineMessage: true})
+	                        }
+	                    );
+	                }
+	            );            
+	        }
+	        else if(this.state.userInput!==""&&this.props.channelId.split("#")[1]=="Bob-Bot"){
+	                this.props.psocket.emit("BotMessage",this.props.name,this.props.channelId,this.state.userInput);
+	                this.setState({userInput:""},function(){
+	                    this.setState({multiLineMessage: false},
+	                        function(){
+	                            this.setState({multiLineMessage: true})
+	                        }
+	                    );
+	                });
+	                this.props.handleProgress();
+	        }
+	    }
     }
-
+    
 	handleOpenShortcuts(){
 
         this.setState({dialogStatus:true});
@@ -248,24 +274,37 @@ export default class NewMessage extends Component {
 			username:this.state.username,
 			summary:this.state.summary,
 			location:this.state.location,
-			startDate:this.state.startDate,
-			endDate:this.state.endDate
+			startTime:this.state.startTime,
+			duration:this.state.duration
 		}
 		const url='https://accounts.google.com/o/oauth2/auth?redirect_uri=http://localhost:8000/oauth2callback&state='+JSON.stringify(obj)+'&response_type=code&client_id=616007233163-g0rk4o8g107upgrmcuji5a8jpnbkd228.apps.googleusercontent.com&scope=https://www.googleapis.com/auth/calendar+https://www.googleapis.com/auth/userinfo.email+https://www.googleapis.com/auth/userinfo.profile&approval_prompt=force&access_type=offline';
 		const eventurl=this.state.eventurl;
-		const actions = [
+		const reminderActions = [
 		    <FlatButton
 		        label="Close"
 		        keyboardFocused={true}
-		    	onTouchTap={this.handleClose}
+		    	onTouchTap={this.handleCloseReminderDialog.bind(this)}
 		    />,
 		    <FlatButton
 		        label="OK"
 		        primary={true}
 		        keyboardFocused={true}
-		        onTouchTap={this.handleSubmit}
+		        onTouchTap={this.handleSubmitReminder.bind(this)}
 		    />
 	   	];
+	   	// const actions = [
+		   //  <FlatButton
+		   //      label="Close"
+		   //      keyboardFocused={true}
+		   //  	onTouchTap={this.handleClose}
+		   //  />,
+		   //  <FlatButton
+		   //      label="OK"
+		   //      primary={true}
+		   //      keyboardFocused={true}
+		   //      onTouchTap={this.handleSubmit}
+		   //  />
+	   	// ];
 		const actions1 = [
 	        <FlatButton
 	       		label="Close"
@@ -316,7 +355,7 @@ export default class NewMessage extends Component {
 		                            <TableRowColumn>Swap between chat and notification window</TableRowColumn>
 		                          </TableRow>
 		                          <TableRow>
-		                            <TableRowColumn>CTRL+Z</TableRowColumn>
+		                            <TableRowColumn>CTRL+SHIFT+K</TableRowColumn>
 		                            <TableRowColumn>Open emojis</TableRowColumn>
 		                          </TableRow>
 		                          
@@ -382,24 +421,22 @@ export default class NewMessage extends Component {
                 </Dialog>
                 );
         }
-		if (this.state.open) {
+        if (this.state.reminderDialog) {
 			return (
-				<HotKeys keyMap={keyMap} handlers={handlers}>
 					<div>
 						<Dialog
-							title="Do you want the BOB to set Reminder"
-							actions={actions}
+							title="It looks like a meeting reminder. Do you want to send the details?"
+							actions={reminderActions}
 							modal={false}
-							open={this.state.open}
-							onRequestClose={this.handleClose}
+							open={this.state.reminderDialog}
+							onRequestClose={this.handleCloseReminderDialog.bind(this)}
 						>
 							Summary : <TextField hintText="Enter the summary" value={this.state.summary} onChange={this.handleChangeSummary}/><br/>
 							Location : <TextField hintText="Enter the location" value={this.state.location} onChange={this.handleChangeLocation}/><br/>
-							Start Date : <DatePicker hintText="Date Picker" onChange={this.handleChangeStartDate}/><br/>
-							End Date : <DatePicker hintText="Date Picker" onChange={this.handleChangeEndDate}/>
+							Start Time : <Datetime hintText="Date Picker" onChange={this.handleChangeStartTime}/><br/>
+							Duration : <TextField hintText="Duration" value={this.state.duration} onChange={this.handleChangeDuration}/>
 						</Dialog>
 					</div>
-				</HotKeys>
 			);
 		}
 		else if (this.state.open1) {

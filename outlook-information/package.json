@@ -14,6 +14,8 @@
     "seneca": "^3.3.0",
     "seneca-balance-client": "^0.6.0",
     "seneca-consul-registry": "^0.1.0",
-    "seneca-mesh": "^0.10.0"
+    "seneca-mesh": "^0.10.0",
+    "node-outlook": "^1.1.6",
+    "simple-oauth2": "^1.1.0"
   }
 }

@@ -5,11 +5,6 @@ import Paper from 'material-ui/Paper';
 import React, { Component } from 'react';
 import ReactGridLayout from 'react-grid-layout';
 import Snackbar from 'material-ui/Snackbar';
-
-// import 'react-grid-layout/css/styles.css';
-// import 'react-resizable/css/styles.css';
-// import 'react-drawer/lib/react-drawer.css';
-
 var base64 = require('base-64');
 var utf8 = require('utf8');
 import cookie from 'react-cookie';

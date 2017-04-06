@@ -37,7 +37,6 @@ export default class Feedback extends Component {
      let obj={"name":"","comment":""};
      obj["name"]=this.state.name;
      obj["comment"]=this.state.comments;
-     //console.log("comment : ", obj["comment"]);
      this.context.socket.emit("feedback",obj);
      let a="We have received your feedback "+this.state.name+".Keep Supporting BOB!!"
      this.setState({display:a,name:"",comments:""})

@@ -38,11 +38,7 @@ export default class ChatHistory extends Component {
 		super(props);
 		this.state={
 		historyEnded:false,
-		bookitem:'',
-	    checkStatus:false,
 	    task:[],
-	    openPop:false,
-	    response:'',
 		sn:false,
 		chipText:""
 	};
@@ -90,17 +86,15 @@ export default class ChatHistory extends Component {
 	
 	handleClickDelete(i){
 		var arr = this.props.chatHistory;
-		console.log(i)
 		var arr_1 = arr.slice(i,i+1);
-		console.log(arr_1)
 		this.props.deleteMessage(i);
-		this.props.psocket.emit('deleteMessage',arr_1,this.props.username,this.props.channelId);
+		this.props.psocket.emit('deleteMessage',i,arr_1,this.props.username,this.props.channelId);
 	}
 
 	handleClickEdit(i,editedMsg){
 		var arr = this.props.chatHistory;
 		var arr_1 = arr.slice(i,i+1);
-		this.props.psocket.emit('editMessage',editedMsg,arr_1,this.props.username,this.props.channelId);
+		this.props.psocket.emit('editMessage',i,editedMsg,arr_1,this.props.username,this.props.channelId);
 		this.props.editMessage(i,editedMsg,arr_1);
 	}
 
@@ -248,7 +242,7 @@ export default class ChatHistory extends Component {
 					return (
 						<div key = {i}>
 							<Chip>{chipText}</Chip>
-							<ChatMessage  index={i} userName={this.props.userName} handleClickEdit={this.handleClickEdit.bind(this)} 
+							<ChatMessage channelID={this.props.channelID} index={i} userName={this.props.userName} handleClickEdit={this.handleClickEdit.bind(this)} 
 									handleClickDelete={this.handleClickDelete.bind(this)} intentdata={data} 
 									intentVal = {intentval} intent_metadata = {intent_metadata} 
 									message={message} check={this.props.bookmark} avatar={this.props.avatars}

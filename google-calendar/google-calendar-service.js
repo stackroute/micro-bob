@@ -7,7 +7,10 @@ Seneca({tag: 'calendar'})
   })
   .use('./google-calendar')
   .use('mesh', {
-    pin: 'api:calendar,impl:google',
+    listen: [
+      {pin: 'api:calendar,impl:google,cmd:ping'},
+      {pin: 'api:calendar,impl:google,cmd:addEvent'}
+    ],
     host: '@eth0',
     discover: {
       registry: {

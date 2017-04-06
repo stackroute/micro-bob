@@ -22,6 +22,10 @@ import request from 'superagent';
 import cookie from 'react-cookie';
 import AutoComplete from 'material-ui/AutoComplete';
 import Chip from 'material-ui/Chip';
+import IconMenu from 'material-ui/IconMenu';
+import MoreVertIcon from 'material-ui/svg-icons/navigation/more-vert';
+import PanoramaFishEye from 'material-ui/svg-icons/image/panorama-fish-eye';
+import Lens from 'material-ui/svg-icons/image/lens';
 
 let SelectableList = makeSelectable(List);
 injectTapEventPlugin();
@@ -79,6 +83,7 @@ export default class ChannelList extends React.Component{
     this.handleGitSubmit=this.handleGitSubmit.bind(this);
     this.handleAddDM=this.handleAddDM.bind(this);
     this.handleSwapChannels=this.handleSwapChannels.bind(this);
+    this.updateStatus = this.updateStatus.bind(this);
     
   }
   
@@ -163,7 +168,6 @@ export default class ChannelList extends React.Component{
           }
           else{
             this.props.snackbar(JSON.parse(res.text).status);
-            console.log("adding DM failed: ",JSON.parse(res.text));
           }
       });
     this.setState({DMDialogOpen:false,DMDialogInput:""});
@@ -220,6 +224,9 @@ export default class ChannelList extends React.Component{
     }
 
 
+  }
+  updateStatus(event,value){
+  this.props.socket.emit("updateStatus",value,this.props.userName);
   }
    
   render(){
@@ -314,7 +321,36 @@ export default class ChannelList extends React.Component{
           return(<ListItem key={i} style={{color:"white"}} value={channelSelectable[i]} primaryText={item} onTouchTap={this.handleChange.bind(this,item)}/>);
         }
       });
+      let projectmemberlist = this.props.projectStatus.map((item,i)=>{
+        let arr={name:[],status:[]}
+        if(item.projectName == this.props.currentProject.split('#')[0]){
+           for(var prop in item.users){
+          
+              arr.name.push(prop);
+              arr.status.push(item.users[prop]);
+            
+           }
+        }
+        let lists=[];    
+          for(let i=0;i<arr.name.length;i++)
+          {
+            let statusicon="";
+            if(arr.status[i] === 'Online'){
+              statusicon = (<IconButton iconStyle={{color:"green",marginTop:-3.5}}><Lens/></IconButton>)
+            }
+            else if(arr.status[i] === 'Offline'){
+               statusicon = (<IconButton iconStyle={{color:"white",marginTop:-3.5}}><PanoramaFishEye/></IconButton>)
+            }
+            else if(arr.status[i] === 'Busy')
+            {
+               statusicon = (<IconButton iconStyle={{color:"orange",marginTop:-3.5}}><Lens/></IconButton>)
+            
+            }
 
+            lists.push(<ListItem key={i} primaryText={arr.name[i]} style={{color:"white"}}  rightIcon={statusicon}/>);
+          }
+          return lists;
+      });
       DMListfiltered = DMListfiltered.map((item,i)=>{  //this is dm channel list.
         if(this.props.unreadCount[this.props.currentChannel.split("#")[0]+'#'+DMList[i]]!=0&&this.props.unreadCount[this.props.currentChannel.split("#")[0]+'#'+DMList[i]]!=undefined)
         {
@@ -358,6 +394,9 @@ export default class ChannelList extends React.Component{
                                   <IconButton iconStyle={{color:"white"}} onTouchTap={this.handleAddDM} style={{marginLeft:"0px"}}><AddCircle/></IconButton>
                                 </Subheader>
                                 {DMListfiltered}     
+                              </SelectableList>
+                              <SelectableList style={{color:"white"}}>
+                                {projectmemberlist}    
                               </SelectableList>
                             </Col>
                           </Row>

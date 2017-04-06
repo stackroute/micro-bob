@@ -1,4 +1,5 @@
 import React,{ Component} from 'react';
+import moment from 'moment';
 import TextField from 'material-ui/TextField';
 import ActionFavorite from 'material-ui/svg-icons/action/favorite';
 import ActionFavoriteBorder from 'material-ui/svg-icons/action/favorite-border';
@@ -24,6 +25,16 @@ export default class ChatMessage extends Component{
       videoState: false
     };
   }
+
+  componentDidMount(){    
+    console.log("jdhjhdjhd",this.props.channelID)
+    this.timerID = setInterval(() => this.setState({updateStatus:new Date()}), 1000);
+  }
+  
+  componentWillUnmount() {
+    clearInterval(this.timerID);
+  }
+  
   handleTime(TimeStamp){
     let date = [];
     let today = [];
@@ -35,6 +46,7 @@ export default class ChatMessage extends Component{
     date[3]= new Date(TimeStamp).getFullYear();
     date[4]= new Date(TimeStamp).getMonth()+1;
     date[5]= new Date(TimeStamp).getDate();
+
     if(hours >12){
       date[2] = "PM";
       date[0] = hours  -12;
@@ -47,24 +59,13 @@ export default class ChatMessage extends Component{
     today[2] = new Date().getDate(); 
     today[3] = new Date().getMinutes();
     today[4] = new Date().getHours();
+
     let today_date = today[2]+"/"+today[1]+"/"+today[0];
     let yesterday = (today[2]-1)+"/"+today[1]+"/"+today[0]
     let hist_date = date[5]+"/"+date[4]+"/"+date[3];
+
     if(today_date === hist_date){
-      if(today[4] === hours){
-        if(today[3] === date[1]){
-          date = "just now";
-        }
-        else{
-          date = today[3] - date[1] + " minutes ago";
-        }
-      }
-      else{
-        date = today[4] - hours + " hours ago";
-      }
-    }
-    else if(yesterday === hist_date){
-      date = date[0]+":"+date[1]+" "+date[2];
+      date=moment(timeFromHistory.toString()).fromNow();
     }
     else{
       date = date[0]+":"+date[1]+" "+date[2];
@@ -90,6 +91,7 @@ export default class ChatMessage extends Component{
     this.setState({edit:true})
   }
   render(){
+
     var msg='';
     let menu='';
     if(typeof(this.props.message.msg) === 'string'){
@@ -147,26 +149,35 @@ export default class ChatMessage extends Component{
        msg = (<CardMedia><img src={this.props.message.msg.url}/></CardMedia>)
       }
     }
-    const intent = (this.props.intentVal != '')?(<CardMedia expandable={true}><GenericForm intentVal={this.props.intentVal} intent_metadata={this.props.intent_metadata} intentdata={this.props.intentdata}/></CardMedia>):(console.log())  
+    let reminderLink="";
+    let intent="";
+    let channel= this.props.channelID.split('#')[1]
+    if(channel === 'Bob-Bot'){
+      reminderLink="";
+      intent="";
+    }
+    else{
+      reminderLink = (this.props.message.reminder.status)?(<CardActions actAsExpander={true}><a href="#">Set reminder in your calender</a></CardActions>):'';
+      intent = (this.props.intentVal != '')?(<CardMedia expandable={true}><GenericForm reminder = {this.props.message.reminder} name={this.props.userName} intentVal={this.props.intentVal} intent_metadata={this.props.intent_metadata} intentdata={this.props.intentdata}/></CardMedia>):''  
     
+    }
       return(
         <div>
           <Row  start="xs">
             <Col xs={12} sm={12} md={12} lg={12} style={{marginTop:"2px",marginBottom:"2px"}}>
               <Card>
                 <CardHeader  
-                    actAsExpander={true}
-                    showExpandableButton={true}
                     title={this.props.message.sender} 
                     subtitle={this.handleTime(this.props.message.TimeStamp)} 
                     avatar={this.props.avatar[this.props.message.sender]} 
                     />
                 {msg}
+                {reminderLink}
                 <CardMedia style={{position:'relative',marginTop:0,marginLeft:'90%'}} 
                   overlayContentStyle={{background:'#ffffff'}} 
                   overlay={
                     <div>
-                        <Checkbox onCheck={this.props.check.bind(this, this.props.message)} 
+                        <Checkbox  defaultChecked={this.props.message.bookmarkStatus} onCheck={this.props.check.bind(this, this.props.message)} 
                           checkedIcon={<ActionFavorite/>}
                           uncheckedIcon={<ActionFavoriteBorder/>}/>
                         {menu}

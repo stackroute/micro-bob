@@ -90,6 +90,26 @@ services:
       - n3
     links:
       - consul
+  bob-bot:
+    image: mesh-bob-bot
+    build: bob-bot
+    depends_on:
+      - base
+      - bob
+    networks:
+      - n3
+    links:
+      - consul
+  intent-extraction:
+    image: mesh-intent-extraction
+    build: intent-extraction
+    depends_on:
+      - base
+      - bob
+    networks:
+      - n3
+    links:
+      - consul 
 networks:
   n3:
     driver: bridge

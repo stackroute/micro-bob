@@ -1,16 +1,13 @@
 var Seneca = require('seneca')
 
-Seneca({tag: 'calendar'})
+Seneca({tag: 'intent'})
   .test('print')
   .use('consul-registry', {
     host: 'consul'
   })
-  .use('./outlook-calendar')
+  .use('./intent-extraction')
   .use('mesh', {
-    listen: [
-      {pin: 'api:calendar,impl:outlook,cmd:ping'},
-      {pin: 'api:calendar,impl:outlook,cmd:addEvent'}
-    ],
+    pin: 'api:bot,impl:nlu,cmd:extractIntent',
     host: '@eth0',
     discover: {
       registry: {
@@ -23,5 +20,5 @@ Seneca({tag: 'calendar'})
   })
   .ready(function () {
     var seneca = this
-    console.log('outlook_calendar', seneca.id)
+    console.log('intent_extraction', seneca.id)
   })

@@ -9,13 +9,22 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "async": "^2.1.4",
     "color": "^1.0.3",
     "express": "^4.15.2",
     "seneca": "^3.3.0",
     "seneca-balance-client": "^0.6.0",
     "seneca-consul-registry": "^0.1.0",
     "seneca-mesh": "^0.10.0",
-    "google-auth-library": "^0.10.0",
-    "googleapis": "^18.0.0"
+    "superagent-relative": "^0.2.0",
+    "recastai": "^2.3.0"
+  },
+  "devDependencies": {
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb": "^14.1.0",
+    "eslint-config-google": "^0.7.1",
+    "eslint-plugin-import": "^2.2.0",
+    "eslint-plugin-jsx-a11y": "^4.0.0",
+    "eslint-plugin-react": "^6.10.3"
   }
 }

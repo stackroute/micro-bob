@@ -1,0 +1,126 @@
+.emoji-mart {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    font-size: 16px;
+    display: inline-block;
+    color: #222427 ;
+    border: 1px solid #d9d9d9 ;
+    border-radius: 5px;
+    background: #FFF;
+}
+
+.emoji-mart, .emoji-mart * {
+    box-sizing: border-box;
+    line-height: 1.15;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.emoji-mart-bar:first-child {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+.emoji-mart-emoji {
+    position: relative;
+    display: inline-block;
+    font-size: 0;
+}
+
+.emoji-mart .emoji-mart-emoji {
+    padding: 6px;
+}
+
+.emoji-mart-anchors {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 6px;
+    color: #858585 ;
+    line-height: 0;
+}
+
+.emoji-mart-anchor {
+    position: relative;
+    flex: 1;
+    text-align: center;
+    padding: 12px 4px;
+    overflow: hidden;
+    transition: color .1s ease-out;
+}
+
+.emoji-mart-anchor:hover, .emoji-mart-anchor-selected {
+    color: #464646 ;
+}
+
+.emoji-mart-search {
+    font-size: 16px;
+    display: block;
+    width: 100%;
+    padding: .2em .6em;
+    margin-top: 6px;
+    border-radius: 25px;
+    border: 1px solid #d9d9d9 ;
+    outline: 0;
+}
+
+.emoji-mart-category{
+    text-align: center;
+}
+
+.emoji-mart-category-label span {
+    display: block;
+    width: 100%;
+    font-weight: 500;
+    padding: 5px 20px;
+    text-align: left;
+    background-color: #fff;
+    background-color: rgba(255, 255, 255, .95);
+}
+
+.emoji-mart-scroll {
+    overflow-y: scroll;
+    height: 270px;
+    padding: 0 6px 6px 6px;
+    border: solid #d9d9d9 ;
+    border-width: 1px 0;
+}
+
+.emoji-mart-title-label {
+    color: #999A9C ;
+    font-size: 26px;
+    font-weight: 300;
+}
+
+.emoji-mart-preview {
+    position: relative;
+    height: 70px;
+}
+
+.emoji-mart-preview-emoji {
+    left: 12px;
+}
+
+.emoji-mart-preview-data {
+    left: 68px;
+    right: 12px;
+    word-break: break-word;
+}
+
+.emoji-mart-preview-skins {
+    right: 30px;
+    text-align: right;
+}
+
+.emoji-mart-preview-emoji, .emoji-mart-preview-data, .emoji-mart-preview-skins {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.emoji{
+    width: 25px;
+    height: 25px;
+}

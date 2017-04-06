@@ -6,6 +6,7 @@ let userSchema = new Schema({
   currentChannel: String,
   avatar:String,
   repos:[String],
-  gitChannelStatus:Boolean
+  gitChannelStatus:Boolean,
+  preferences:String
 });
 module.exports = mongoose.model('UserInfo', userSchema);

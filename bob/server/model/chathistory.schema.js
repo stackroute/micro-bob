@@ -7,7 +7,8 @@ var chathistorySchema = new Schema({
 		sender: String,
 		msg : String,
 		TimeStamp: String,
-		bookmarkStatus: Boolean
+		bookmarkStatus: Boolean,
+		reminder:String
 
 	}],
 	p_page: Schema.Types.ObjectId,

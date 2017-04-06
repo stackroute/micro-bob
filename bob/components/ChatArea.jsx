@@ -23,6 +23,8 @@ import AppBar from 'material-ui/AppBar';
 import Clear from 'material-ui/svg-icons/content/clear';
 import {List,ListItem} from 'material-ui/List';
 import Scrollbars from 'react-custom-scrollbars';
+import FlatButton from 'material-ui/FlatButton';
+import LinearProgress from 'material-ui/LinearProgress';
 
 const styles = {
 	chip: {
@@ -34,10 +36,11 @@ export default class Chat extends React.Component{
 	constructor(props) 
 	{
 		super(props);
-		this.state={typing:[],chatHistory:[],pagesDisplayed:0,
-			next:"",searchText:"",members:[],addedMembers:[],
+		this.state={typing:[],authOpen:false,eventStatus:false,eventMessage:'',
+			chatHistory:[],pagesDisplayed:0,
+			next:"",searchText:"",members:[],addedMembers:[],preferredCalendar:"",
 			openDrawer:false,booklist:[],addOpen:false,membersOpen:false,
-			membersList:[],gitStatus:false,create:false};
+			membersList:[],gitStatus:false,create:false,progressState:false};
 
 			this.handleShowMembers=this.handleShowMembers.bind(this);
 			this.handleMembersClose=this.handleMembersClose.bind(this);
@@ -48,22 +51,35 @@ export default class Chat extends React.Component{
 			this.handleSubmit=this.handleSubmit.bind(this);
 			this.handleLeave=this.handleLeave.bind(this);
 			this.handleSelect=this.handleSelect.bind(this);
+			this.handleCallOAuth=this.handleCallOAuth.bind(this);
+            this.handleCloseAuth=this.handleCloseAuth.bind(this);
+            this.handleProgressStateUp=this.handleProgressStateUp.bind(this);
+			this.handleProgressStateDown=this.handleProgressStateDown.bind(this);
+			this.handleEventCreated = this.handleEventCreated.bind(this);
+			this.handleEventStatusClose = this.handleEventStatusClose.bind(this);            
 	}
 
 	componentDidMount() {
 		this.props.socket.on('someoneAdded',(name)=>{ //Sent when a user subscribes to the channel.
 			this.handleSomeoneAdded(name);
 		});
+		this.props.socket.on('deleteMessageEvent',(i, msg)=>{ //Sent when a user subscribes to the channel.
+			
+			this.deleteMessage(i,msg);
+		});
+		this.props.socket.on('editMessageEvent',(i,newMsg,arr_1)=>{ //Sent when a user subscribes to the channel.
+			console.log("editedd")
+			this.editMessage(i,newMsg,arr_1);
+		});
 		this.props.socket.on('takeMessage',(channelID,msg)=>{ //Sent from this.props.socket server when a message is published in the redis channel.
 			this.handleTakeMessage(channelID,msg);
 		});
+		this.props.socket.on('tokenNotFound',(pref)=>{
+			this.handleCallOAuth(pref);
+        });
 		this.props.socket.on('chatHistory',(msg,next)=>{ //msg is an array of objects having messages from a page in mongodb.
-					console.log("historyhh",msg[0],next)
 					this.handleChatHistory(msg,next);
 		});
-		// this.props.socket.on('typing',(name)=>{
-		// 		this.handleTyping(name);
-		// 	});
 		this.props.socket.on('pempty',(msg)=>{
 			this.handlePempty(msg);
 		});
@@ -72,19 +88,18 @@ export default class Chat extends React.Component{
 		});
 		this.props.socket.on("receiveBoomarkHistory",(receiveBoomarkHistory)=>{
 			let a=this.props.channelID;
-			//console.log(receiveBoomarkHistory[0].bookmark);
-			//console.log("Received BookMark History",receiveBoomarkHistory[0].bookmark[this.props.channelID][0]);
 			this.setState({booklist:receiveBoomarkHistory[0].bookmark});
+		});
+		this.props.socket.on("eventInserted",(msg)=>{			
+			this.handleEventCreated(msg);
 		});
 		this.props.socket.emit('bookmarkHistory',this.props.userName,this.props.channelID);
 		this.props.socket.on("takeGitHubNotifications",(history)=>{
 			this.setState({chatHistory:history,gitStatus:true});
-            //console.log(history);
         });
 	}
 
 	componentWillReceiveProps(nextProps){
-		//console.log(nextProps,this.props,"cwp chatarea outisde if");
 		if(this.props.channelID!=nextProps.channelID){
 			let msg = {"pageNo":"initial_primary","channelName":nextProps.channelID};//increment the pages displayed currently.
 			nextProps.socket.emit('receiveChatHistory',msg);
@@ -95,6 +110,18 @@ export default class Chat extends React.Component{
 	handleSomeoneAdded(msg){
 		//currently empty.
 	}
+	handleCallOAuth(pref){
+		this.setState({authOpen:true,preferredCalendar:pref});
+	}
+	handleCloseAuth(){
+		this.setState({authOpen:false})
+	}
+	handleEventCreated(msg){
+		this.setState({eventStatus:true,eventMessage:msg});
+	}
+	handleEventStatusClose(){
+		this.setState({eventStatus:false});
+	}
 
 	handleTakeMessage(channelId,msg){
 		if(channelId===this.props.channelID){
@@ -104,6 +131,10 @@ export default class Chat extends React.Component{
 			else
 			{
 				//msg = this.handleTime(msg);
+				console.log('In chat Area: ', msg);
+				if(msg.sender === 'Bob-Bot'){
+					this.handleProgressStateDown();
+				}
 				this.setState((prevState,props)=>{
 					prevState.chatHistory.push(msg);
 					return {chatHistory:prevState.chatHistory};
@@ -153,7 +184,6 @@ export default class Chat extends React.Component{
 			this.props.socket.emit('receiveChatHistory',msg1);
 		}
 		else{
-			//console.log("GitHub Channel is Clicked");
 			this.props.socket.emit("GetGitHubNotifications",this.props.userName);
 		}
 	}
@@ -185,7 +215,12 @@ export default class Chat extends React.Component{
 	handleClose(){
 		this.setState({addOpen:false})
 	}
-
+	handleProgressStateUp(){
+		this.setState({progressState: true})
+	}
+	handleProgressStateDown(){
+		this.setState({progressState: false})
+	}
 	handleNewRequest(){
 		var a=this.state.searchText;
 		var b=this.state.membersList;
@@ -221,7 +256,6 @@ export default class Chat extends React.Component{
 		this.props.socket.emit("leaveGroup",this.props.channelID,this.props.userName);
 	}
 	handleSelect(book,event,status){
-		console.log("bookmark",book,event,status)
 		if(status){
 			this.state.booklist.push(book);
 			this.props.socket.emit('saveBookmarks',book,this.props.userName,this.props.channelID,);
@@ -232,13 +266,12 @@ export default class Chat extends React.Component{
 			this.props.socket.emit('deleteBookmarks',book,this.props.userName,this.props.channelID);
 		}
  	}
- 	deleteMessage(i){
+ 	deleteMessage(i,msg){
  		let newarr = this.state.chatHistory;
 		newarr.splice(i,1);
  		this.setState({chatHistory:newarr});
  	}
  	editMessage(i,newMsg,arr_1){
- 		console.log(i,newMsg,arr_1,arr_1[0].msg)
  		let newarr = this.state.chatHistory;
  		arr_1[0].msg = newMsg;
  		newarr.splice(i,1,arr_1[0]);
@@ -246,6 +279,9 @@ export default class Chat extends React.Component{
  	}
  	render(){
  		let typ;
+ 		let obj={
+ 			username:this.props.userName,
+ 		}
 		if(this.state.typing.length===1){
 			typ = <Chip>{this.state.typing + " is typing"}</Chip>;
 		}
@@ -272,6 +308,25 @@ export default class Chat extends React.Component{
 		if(this.props.channelID.split("#")[1]!="general"){
 			leave=<IconButton ><ExitToApp onTouchTap={this.handleLeave}/></IconButton>
 		}
+		let authURL='';
+        //console.log(this.state.preferredCalendar,"CALENDAR");
+        const outlookAuthURL='https://login.microsoftonline.com/common/oauth2/v2.0/authorize?redirect_uri=http://localhost:8000/callback&state='+JSON.stringify(obj)+'&scope=openid+offline_access+https://outlook.office.com/calendars.readwrite&response_type=code&client_id=de8ad897-a459-4bda-baa6-a98b3fc8068f';
+        const googleAuthURL='https://accounts.google.com/o/oauth2/auth?redirect_uri=http://localhost:8000/oauth2callback&state='+JSON.stringify(obj)+'&response_type=code&client_id=616007233163-g0rk4o8g107upgrmcuji5a8jpnbkd228.apps.googleusercontent.com&scope=https://www.googleapis.com/auth/calendar+https://www.googleapis.com/auth/userinfo.email+https://www.googleapis.com/auth/userinfo.profile&approval_prompt=force&access_type=offline';
+        (this.state.preferredCalendar === 'google')?(authURL = googleAuthURL):(authURL = outlookAuthURL)
+		const authActions=[
+        <FlatButton
+                label="Close"
+                keyboardFocused={true}
+                onTouchTap={this.handleCloseAuth}
+        />,
+        <FlatButton
+            label="OK"   
+            href={authURL}        
+            primary={true}
+            keyboardFocused={true}
+            
+        />
+        ];
 		return(
 			
 			<center style={{height:"100%",width:"100%"}}>
@@ -284,6 +339,23 @@ export default class Chat extends React.Component{
 										<div style={{float: 'left'}}>
 										{this.props.presentChannel}
 										</div>
+										 <div>
+                                            <Dialog
+                                              title="Not Authorised.Do You want to auhtorise?"
+                                              actions={authActions}
+                                              modal={false}
+                                              open={this.state.authOpen}
+                                              onRequestClose={this.handleCloseAuth}
+                                            >                                              
+                                            </Dialog>
+                                            <Dialog
+                                            	title={this.state.eventMessage}
+                                            	modal={false}
+                                            	open={this.state.eventStatus}
+                                            	onRequestClose={this.handleEventStatusClose}
+                                            >
+                                            </Dialog>
+                                        </div>
 									</Col>
 
 									<Col xs={6} sm={6} md={6} lg={6} style={{height:'100%'}}>
@@ -334,13 +406,14 @@ export default class Chat extends React.Component{
 						<Row style={{height:'78%',overflowY:'auto',width:"100%"}}>
 							<Col xs={12} sm={12} md={12} lg={12}>
 								<Scrollbars style={{width:"100%", height:"100%"}}>
-									<ChatHistory userName={this.props.userName} gitStatus={this.state.gitStatus} editMessage={this.editMessage.bind(this)} deleteMessage={this.deleteMessage.bind(this)} avatars={this.props.avatars} channelId={this.props.channelID} psocket={this.props.socket} next={this.state.next} bookmark={this.handleSelect} username={this.props.userName} chatHistory={this.state.chatHistory}/>
+									<ChatHistory channelID={this.props.channelID} userName={this.props.userName} gitStatus={this.state.gitStatus} deleteMessage={this.deleteMessage.bind(this)} editMessage={this.editMessage.bind(this)} avatars={this.props.avatars} channelId={this.props.channelID} psocket={this.props.socket} next={this.state.next} bookmark={this.handleSelect} username={this.props.userName} chatHistory={this.state.chatHistory}/>
 								</Scrollbars>
+								{this.state.progressState ? <LinearProgress/>:''}
 							</Col>
 						</Row>
 						<Row bottom="lg" style={{height:"10%",width:'100%'}}>
 							<Col xs={12} sm={12} md={12} lg={12}>								
-								<NewMessage channelId={this.props.channelID} psocket={this.props.socket} name={this.props.userName} />								
+								<NewMessage channelId={this.props.channelID} psocket={this.props.socket} name={this.props.userName} handleProgress={this.handleProgressStateUp}/>								
 							</Col>
 						</Row>
 					</Grid>

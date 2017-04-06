@@ -1,15 +1,15 @@
 var Seneca = require('seneca')
 
-Seneca({tag: 'calendar'})
+Seneca({tag: 'bot'})
   .test('print')
   .use('consul-registry', {
     host: 'consul'
   })
-  .use('./outlook-calendar')
+  .use('./bob-bot')
   .use('mesh', {
     listen: [
-      {pin: 'api:calendar,impl:outlook,cmd:ping'},
-      {pin: 'api:calendar,impl:outlook,cmd:addEvent'}
+      {pin: 'api:bot,impl:concepts-bot,intent:greeting'},
+      {pin: 'api:bot,impl:concepts-bot,intent:documentsearch'}
     ],
     host: '@eth0',
     discover: {
@@ -23,5 +23,5 @@ Seneca({tag: 'calendar'})
   })
   .ready(function () {
     var seneca = this
-    console.log('outlook_calendar', seneca.id)
+    console.log('concepts-bot', seneca.id)
   })

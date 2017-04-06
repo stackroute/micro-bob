@@ -12,6 +12,7 @@ let LatList = require('./../model/lat.schema.js'),
     Tasks = require('./../model/tasks.schema.js');
 const ChannelInfo = require('./../model/channelinfo.schema.js');
 let GoogleAToken = require('./../model/googleatoken.schema.js');
+let OutlookToken = require('./../model/outlooktoken.schema.js');
 let bookmarkData = require('./../model/bookmarkSchema.js');
 const GitChannel=require('./../model/gitchannel.schema.js');
 let unreadCount = {};
@@ -20,7 +21,9 @@ let currentUser = "";
 var arr = [];
 var recastai = require('recastai');
 var aiclient = new recastai.Client('bd8975c331f2800dd57a331b25e2cc9a','en');
-
+var aiclient2 = new recastai.Client('3dac6036f83e108b78feee4a5f9478dd','en');
+var statusChange = require('./../onUserStatusChange');
+var onUserstatusChangeforProject = require('./../onUserStatusChangeForProject');
 //Google Auth related variables ---------->
 let google = require('googleapis'),
     calendar = google.calendar('v3'),
@@ -40,11 +43,10 @@ module.exports = function(io, socket) {
     sub.on('message', handleMessage);
     sub.on('subscribe', handleSubscribe);
     sub.on('unsubscribe', handleUnsubscribe);
-
-    //Below are the event handlers for socket events
+    socket.on('updateStatus',updateStatus);
+    socket.on('login',handleLogin.bind(null,socket));
     socket.on('send message', handleSendMessage); //handling message sent from user.
     socket.on('typing', handleTyping); //handling typing event from user.
-    socket.on('disconnect', handleDisconnect); //handling disconnecting event from user.
     socket.on('getUnreadNotification', handlegetUnreadNotification); //request for unreadnotifications for a user.
     socket.on('receiveChatHistory', handleReceiveChatHistory); //request for sending chat history by user. FIXME:put new function from 6th sprint
     socket.on('getResetNotification', handleResetNotification); //request for resetting chat history. FIXMEput new function from 6th sprint.
@@ -57,6 +59,83 @@ module.exports = function(io, socket) {
     socket.on('subscribeMe', handleSubscribeMe);
     socket.on('deleteMessage' , handleDeleteMessage);
     socket.on('editMessage', handleEditMessage);
+    socket.on('setPreferences',handlePreferences);
+    socket.on('findAToken',handleFindToken);
+    socket.on('addCalendarEvent',handleAddCalendarEvent);
+    socket.on('callServiceDiscovery',handleCallServiceDiscovery);
+
+    function handleCallServiceDiscovery(){
+
+        ajax.get('localhost:8000/api/available/calendar',function(err,data){});
+    }
+
+    function updateStatus(value,userName){
+        if(value == 1){
+            statusChange(userName,"Busy");
+        }
+        else if(value == 2){
+            statusChange(userName,"Offline");
+        }
+        else
+            statusChange(userName,"Online");
+    }
+    
+    function handleAddCalendarEvent(details,username){
+
+        UserInfo.find({username:username},function(err,reply){
+            var pref = reply[0].preferences;
+            if( pref === 'outlook'){
+                OutlookToken.find({username:username},function(err,rep){
+                    ajax.get('localhost:8000/api/calendar/'+pref+'?name='+username+'&details='+JSON.stringify(details)+'&tok='+JSON.stringify(rep[0].token),function(err,data){});
+                });
+            }
+            else{
+                GoogleAToken.find({username:username},function(err,rep){
+                    ajax.get('localhost:8000/api/calendar/'+pref+'?name='+username+'&details='+JSON.stringify(details)+'&tok='+JSON.stringify(rep[0].token),function(err,data){});
+                });
+            } 
+        });    
+    }
+    function handleFindToken(userName){
+        UserInfo.find({username:userName},function(err,rep){ 
+            if(rep[0].preferences === 'outlook'){
+                OutlookToken.findOne({username:userName},function(err,reply){
+                    if(reply == null){
+                        socket.emit('tokenNotFound',rep[0].preferences);
+                   }
+                    else{
+                        socket.emit('tokenFound');
+                    }
+                });
+            }
+            if(rep[0].preferences === 'google'){                        
+                GoogleAToken.findOne({username:userName},function(err,reply){
+                    if(reply == null){
+                        socket.emit('tokenNotFound',rep[0].preferences);
+                   }
+                    else{
+                        socket.emit('tokenFound');
+                    }
+                });
+            }
+        });        
+    }
+    function handlePreferences(preference,userName){
+        console.log(preference,"PREFFFFFFFFFFFFFFFFFFFFFFFF");
+       UserInfo.find({username:userName},function(err,reply){
+            if(err)console.log('Error.Cannot Find');
+            else {
+                if(preference === 0)
+                {
+                    UserInfo.update({username:userName},{$set:{preferences:'google'}},function(err,reply){});
+                }
+                else if(preference === 1)
+                {
+                    UserInfo.update({username:userName},{$set:{preferences:'outlook'}},function(err,reply){});
+                }
+            }
+       });
+    }
 
     function handleSubscribeMe(channelName) {
         //console.log("subscribing socket: ", socket.id, " to ", channelName);
@@ -71,10 +150,42 @@ module.exports = function(io, socket) {
 
 
     function deleteBookmarks(booklist, userName, channelID) {
-        // bookmarkData.find({userName:userName},function(err,reply){
-        //     console.log("bookmarkData",reply[0].bookmark[0]);
-        // })
-        
+        //Changing bookmark status in chathistory
+        //console.log(booklist)
+        client.lrange(channelID, 0, -1, function(err, reply) {                       
+            reply.map((item,i)=>{
+                var it = JSON.parse(item)
+                var sender = it[Object.keys(it)[0]];
+                var mesg = it[Object.keys(it)[1]];
+                var time = it[Object.keys(it)[2]];
+                var bookmarkStatus = it[Object.keys(it)[3]]
+                //var id = it[Object.keys(it)[4]];
+                var new_msg = {
+                    sender: sender,
+                    msg: mesg,
+                    TimeStamp: time,
+                    bookmarkStatus:false
+                }
+                if(sender === booklist.sender && mesg === booklist.msg && time === booklist.TimeStamp && bookmarkStatus === booklist.bookmarkStatus)
+                {
+                    arr.push(JSON.stringify(new_msg));
+                }
+                else{
+                    arr.push(item);
+                }
+                client.del(channelID);
+                arr.map((item,i)=>{
+                    client.rpush(channelID, item,function(err, reply) { 
+                    });
+                })
+            });
+        });
+        arr=[];
+
+        //Edit if booklist is in Mongo
+        ChatHistorymodel.update({channelname:channelID,'msgs._id':booklist._id},{$set:{'msgs.$.bookmarkStatus':false}},function(err,reply){
+            console.log("reply",reply)
+        });
         let a = {
             channelid: channelID,
             sender: booklist.sender,
@@ -85,7 +196,8 @@ module.exports = function(io, socket) {
         })
     }
 
-    function handleDeleteMessage(message,username,channelID){
+    function handleDeleteMessage(i,message,username,channelID){
+        socket.broadcast.emit('deleteMessageEvent',i,message);
         let flag=0;
         if(username === message[0].sender){
             client.lrange(channelID, 0, -1, function(err, reply) {                       
@@ -124,7 +236,8 @@ module.exports = function(io, socket) {
         }
     }
 
-    function handleEditMessage(editedMsg,message,username,channelID){
+    function handleEditMessage(i,editedMsg,message,username,channelID){        
+        socket.broadcast.emit('editMessageEvent',i,editedMsg,message);
         if(username === message[0].sender){
             client.lrange(channelID, 0, -1, function(err, reply) {                       
                 reply.map((item,i)=>{
@@ -133,11 +246,14 @@ module.exports = function(io, socket) {
                     var mesg = it[Object.keys(it)[1]];
                     var time = it[Object.keys(it)[2]];
                     var bookmarkStatus = it[Object.keys(it)[3]];
+                    var reminder = it[Object.keys(it)[4]];
                     //var id = it[Object.keys(it)[4]];
                     var new_msg = {
                         sender: sender,
                         msg: editedMsg,
-                        TimeStamp: time
+                        TimeStamp: time,
+                        bookmarkStatus:bookmarkStatus,
+                        reminder:reminder
                     }
                     if(sender === message[0].sender && mesg === message[0].msg && time === message[0].TimeStamp && bookmarkStatus === message[0].bookmarkStatus)
                     {
@@ -161,7 +277,6 @@ module.exports = function(io, socket) {
             });
         }
     }
-
     function saveBookmarks(booklist, userName, channelID) {
         //Changing bookmark status in chathistory
         console.log(booklist)
@@ -413,13 +528,20 @@ module.exports = function(io, socket) {
 
     function handleMessage(channel, message) { //message is text version of the message object.
         message = JSON.parse(message);
-        //console.log("received in redis topic: ", message);
-
-        if (message.hasOwnProperty('newDM'))
+        //console.log(channel,"channel in handlemessage");
+       // message["currentUser"]=socket.currentUser;
+        if (message.hasOwnProperty('userName')){
+            socket.emit('userStatus',message,channel);
+            //console.log(message,"message");
+        }
+        
+        else if (message.hasOwnProperty('newDM')){
             socket.emit('joinedNewChannel', message);
-        else
-            socket.emit('takeMessage', channel, message);
-    }
+        }
+        else{
+        socket.emit('takeMessage', channel, message);
+        }
+     }
 
     function handleSubscribe(channel, count) { //count is the total number channels user is subscribed to.
         //currently this is empty.
@@ -430,58 +552,69 @@ module.exports = function(io, socket) {
     }
     // FIXME: rewrite without using io
     function handleSendMessage(sender, channelID, msg) { //it will publish to the given channel and put it in database.FIXME:see 50 limit has reached
+        var flag = 0;
         let date = new Date();
         let obj = {};
-        obj = {'sender': sender, 'msg': msg, 'TimeStamp': date, 'bookmarkStatus': false } //-and if reached put it to mongoDB. Better write this function again.
-        pub.publish(channelID, JSON.stringify(obj));
-        pushToRedis(channelID, obj);
-        // let url = "https://westus.api.cognitive.microsoft.com/luis/v2.0/apps/cfab6737-9b9c-4f38-9119-b834418fc8e8?subscription-key=2e2d4fc5300843e4a29b3bc644edad19" + "&q=" + msg + "&verbose=true",
-        //     summary = '',
-        //     location = '';
-        //    ajax.get(url).end((error,response)=>{
-        //   if(response){
-        //     console.log('inside response');
-        //     //Add Reminder START ---------->
-        //     if(response.body.topScoringIntent.intent === "Add Reminder"){
-        //       if(response.body.entities.length>=1){
-        //         if (response.body.entities[0].type==="builtin.datetime.date") {
-        //           summary='',location='';
-        //         }
-        //         else if(response.body.entities[0].type==="meeting::summary"){
-        //           summary = response.body.entities[0].entity;
-        //         }
-        //         else if (response.body.entities[0].type==="meeting::location") {
-        //           location = response.body.entities[0].entity;
-        //         }
-        //         else if (response.body.entities[1].type==="meeting::summary") {
-        //           summary = response.body.entities[1].entity;
-        //         }
-        //         else if(response.body.entities[1].type==="meeting::location"){
-        //           location = response.body.entities[1].entity;
-        //         }
-        //         socket.emit('confirmSetRemainder', response.body.dialog.status.toUpperCase(), summary, location);
-        //       }
-        //     }
-        //     //Add Reminder END ---------->
-
-        //     //Tasks START ---------->
-        //     else if(response.body.topScoringIntent.intent === "showTask"){
-        //       console.log('inside show task');
-        //       Tasks.findOne({channelName: channelID}, function(err, reply){
-        //         let task=[];
-        //         if (reply!==null) {
-        //           console.log('tasks : ',reply.tasks);
-        //           socket.emit('confirmStickyTasks', reply.tasks);
-        //         }
-        //         else {
-        //           console.log('empty task array');
-        //           socket.emit('confirmStickyTasks', task);
-        //         }
-        //       });
-        //     }
-        //     //Tasks END ---------->
-        //   }
-        // });
+        var entities=[];
+        var entity={};
+        if(typeof(msg) === "string"){
+            aiclient2.textConverse(msg)
+            .then(function(res) {
+                console.log(res)
+                if(res.entities.length>0){
+                    for(let i=0;i<res.entities.length;i++)
+                    {
+                        if(res.entities[i].name === "keyword"){
+                            flag = 1;
+                        }
+                        else if(res.entities[i].name === "subject"){
+                            entity = {"subject" : res.entities[i].raw}
+                            entities.push(entity)
+                        }
+                        else if(res.entities[i].name === "locations"||res.entities[i].name === "location"){
+                            entity = {"location" : res.entities[i].raw}
+                            entities.push(entity)
+                        }
+                        else if(res.entities[i].name === "datetime"||res.entities[i].name === "start-datetime"){
+                            entity = {"starttime" : res.entities[i].raw}
+                            entities.push(entity)
+                        }
+                        else if(res.entities[i].name === "duration"){
+                            entity = {"duration" : res.entities[i].hours}
+                            entities.push(entity)
+                        }
+                        else{
+                            console.log()
+                        }
+                    }
+                    if(flag === 1){
+                        socket.emit('setReminder', entities); 
+                        socket.on('reminderAccepted',function(username, summary, location, startTime, duration){
+                            var reminderObj = {'Summary':summary,'Location':location,'StartTime':startTime,'Duration':duration};  
+                            obj = {'sender': sender, 'msg': msg, 'TimeStamp': date, 'bookmarkStatus': false, 'reminder':{'status':true,'reminder':reminderObj}} //-and if reached put it to mongoDB. Better write this function again.
+                            pub.publish(channelID, JSON.stringify(obj));
+                            pushToRedis(channelID, obj);            
+                        });                     
+                        
+                    }
+                    else{
+                        obj = {'sender': sender, 'msg': msg, 'TimeStamp': date, 'bookmarkStatus': false, 'reminder':{'status':false}} //-and if reached put it to mongoDB. Better write this function again.
+                        pub.publish(channelID, JSON.stringify(obj));
+                        pushToRedis(channelID, obj);        
+                    }
+                }
+                else{
+                    obj = {'sender': sender, 'msg': msg, 'TimeStamp': date, 'bookmarkStatus': false, 'reminder':{'status':false}} //-and if reached put it to mongoDB. Better write this function again.    
+                    pub.publish(channelID, JSON.stringify(obj));
+                    pushToRedis(channelID, obj);  
+                }
+            });
+        }
+        else{
+            obj = {'sender': sender, 'msg': msg, 'TimeStamp': date, 'bookmarkStatus': false, 'reminder':{'status':false}} //-and if reached put it to mongoDB. Better write this function again.
+            pub.publish(channelID, JSON.stringify(obj));
+            pushToRedis(channelID, obj);
+        }
     }
 
     function handleTyping(name, channelId) { //emit the typing event to all connected users.
@@ -497,6 +630,7 @@ module.exports = function(io, socket) {
 
             UserInfo.findOneAndUpdate({ username: currentUser }, { $set: { currentChannel: currentChannelName } }, function(err, reply) {});
         });
+        statusChange(socket.currentUser,"Offline");
 
     }
 
@@ -572,85 +706,128 @@ module.exports = function(io, socket) {
         });
     }
 
-    socket.on('login', function(usrname) {
-        //console.log("first line onlt", usrname,projectName);
-        sub.subscribe('general');
-        currentUser=usrname;
-        let lat = null;
-        let loginTime = new Date().getTime();
-        let gitChannelStatus=false;
-        let repos=[];
-        //currentChannel=projectName+"#general";
-        LatList.findOne({ username: usrname }, function(err, res) {
-                if (res != null) {
-                    lat = res.lat;
-                    //console.log(lat,"This is lat")
-                }
+    function handleLogin(socket, usrname) {
+        socket.currentUser=usrname;
+        socket.on('disconnect', handleDisconnect.bind(null,socket));
+        ChannelInfo.find({},function(err,rep){
+            let projects=[];
+            let getProject=[];
+            let result=[];
+            rep.forEach(function(data,i){
+                if(data.members.includes(usrname)){
+                projects.push(data.channelName.split('#')[0]);
+            }
+            });
+            projects = projects.filter(function(item,index,projects){
+            return projects.indexOf(item) == index;
+            });
+            async.each(projects,function(project,callback){
+             //console.log(project,"here project name only")
+            pub.hgetall(project+":s3",function(err,result){
+                // console.log(result,"result");
+            var obj={
+            projectName:project,
+            users:result
+            }
+            getProject.push(obj);
+            callback();
+            });
 
-            //search the DB for username
-        UserInfo.findOne({ username: usrname }, function(err, reply) {
-            console.log(reply.gitChannelStatus,reply.repos,"Login Event");
-            gitChannelStatus=reply.gitChannelStatus;
-            currentChannelName=reply.currentChannel;
-            repos=reply.repos;
-            let avatars={};
-            var botChannel = currentChannelName.split("#");
-            if(botChannel[1] != 'Bob-Bot'){
-                ChannelInfo.findOne({channelName:currentChannelName},function(err,rep){
+       },
+        function(err){
+            if(err){
+            console.log("err",err);
 
+           }
+            else{
+            socket.emit('getStatus',getProject);
+            console.log("there is no error");
             
+            }
+            })
+            projects.forEach(function(project,i){
+            sub.subscribe(project);
+            })
+        })
+        statusChange(usrname,"Online");
+            sub.subscribe('general');
+            currentUser=usrname;
+            let lat = null;
+            let loginTime = new Date().getTime();
+            let gitChannelStatus=false;
+            let repos=[];
+            //currentChannel=projectName+"#general";
+            LatList.findOne({ username: usrname }, function(err, res) {
+                    if (res != null) {
+                        lat = res.lat;
+                        //console.log(lat,"This is lat")
+                    }
 
-                    console.log(usrname,currentChannelName,rep.members,"UsserNammeeee");
-                    var channelList = reply.channelList;
-                    async.each(reply.channelList, function(item, callback) {
-                        sub.subscribe(item);
-                        let a = item;
-                        client.lrange(item, 0, -1, function(err, res) {
-                            let count = 0;
-                            res.forEach(function(item, i) {
-                                item = JSON.parse(item);
-                                if (new Date(item.TimeStamp).getTime() > new Date(lat[a]).getTime()) {
-                                    count++;
-                                }
+                //search the DB for username
+            UserInfo.findOne({ username: usrname }, function(err, reply) {
+                console.log(reply.gitChannelStatus,reply.repos,"Login Event");
+                gitChannelStatus=reply.gitChannelStatus;
+                currentChannelName=reply.currentChannel;
+                repos=reply.repos;
+                let avatars={};
+                var botChannel = currentChannelName.split("#");
+                //if(botChannel[1] != 'Bob-Bot'){
+                    ChannelInfo.findOne({channelName:currentChannelName},function(err,rep){
+
+                
+
+                        console.log(usrname,currentChannelName,rep.members,"UsserNammeeee");
+                        var channelList = reply.channelList;
+                        async.each(reply.channelList, function(item, callback) {
+                            sub.subscribe(item);
+                            let a = item;
+                            client.lrange(item, 0, -1, function(err, res) {
+                                let count = 0;
+                                res.forEach(function(item, i) {
+                                    item = JSON.parse(item);
+                                    if (new Date(item.TimeStamp).getTime() > new Date(lat[a]).getTime()) {
+                                        count++;
+                                    }
+                                });
+
+                                unreadCount[a] = count;
+                                callback();
                             });
 
-                            unreadCount[a] = count;
-                            callback();
-                        });
+                            },function(err){
+                               async.each(rep.members,function(member,callback){
+                                  UserInfo.findOne({username:member},function(err,response){
+                                    //console.log(response.avatar);
+                                    if(response != null){
+                                        avatars[member]=response.avatar;
+                                    }
+                                    //console.log(avatars);
+                                     callback();
+                                  })
+                                 
+                              },function(err){
+                               // console.log(channelList,unreadCount,lat,currentChannelName,avatars,gitChannelStatus,repos);
+                              socket.emit('channelList', channelList, unreadCount, lat,currentChannelName,avatars,gitChannelStatus,repos);
+                            })
+                    })
+               // function getAvatars(callback){
+                 
+                //}
+                // async.waterfall([getAvatars],function(err,reply){
+                //   console.log(avatars,"Login");
+                  
+                // })
+                    //client.lpush("###"+usrname,socket);
+                    //console.log("Login",avatars);
+                    
+                });
+                //}
+              });
 
-                        },function(err){
-                           async.each(rep.members,function(member,callback){
-                              UserInfo.findOne({username:member},function(err,response){
-                                //console.log(response.avatar);
-                                avatars[member]=response.avatar;
-                                //console.log(avatars);
-                                 callback();
-                              })
-                             
-                          },function(err){
-                           // console.log(channelList,unreadCount,lat,currentChannelName,avatars,gitChannelStatus,repos);
-                          socket.emit('channelList', channelList, unreadCount, lat,currentChannelName,avatars,gitChannelStatus,repos);
-                        })
-                })
-           // function getAvatars(callback){
-             
-            //}
-            // async.waterfall([getAvatars],function(err,reply){
-            //   console.log(avatars,"Login");
-              
-            // })
-                //client.lpush("###"+usrname,socket);
-                //console.log("Login",avatars);
-                
-            });
-            }
-          });
-
-         })
-   })
+             })
+    }
 
     socket.on('currentChannel', function(currentChannel, prevChannel, userName) {
-
         let avatars = {}
         currentChannelName = currentChannel;
         let d = new Date();
@@ -751,102 +928,149 @@ module.exports = function(io, socket) {
         })
     }
 
-    socket.on("addNewUser", function(userName, projectName, membersList, avatar) {
+       socket.on("addNewUser", function(userName, projectName, membersList, avatar) {
+        let TeamName = [];
+        let projectStatus =[];
+        let Projectmembers = membersList;
+        let obj ={};
+        let obj2 = {};
+        pub.keys('*',function(err,keys){
+          TeamName = keys.slice();
+        })
         let repositary=[];
-      request.get("https://api.github.com/users/"+userName+"/repos").end((err,res)=>{
-    async.each(res.body,function(repos,callback){
-    repositary.push(repos.name);
-    callback();
-  },function(err){
-
-  console.log("Repos ",repositary);
-
-        UserInfo.findOne({ username: userName }, function(err, reply) {
-            if (reply == null) {
-               // console.log(avatar, "AAA");
-                let a = [];
-                a.push(projectName + "#general");
-                a.push(projectName + "#Bob-Bot#" + userName);
-                let user = new UserInfo({
-                    username: userName,
-                    channelList: a,
-                    currentChannel: projectName + "#general",
-                    avatar: avatar,
-                    gitChannelStatus:false,
-                    repos:repositary
-                });
-                user.save(function(err, reply) {
-                    let pn = projectName + "#general";
-                    let latob = {};
-                    latob[pn] = new Date();
-                    let lat = new LatList({
-                        username: userName,
-                        lat: latob
-                    });
-                    console.log("Channel Saving");
-                    let channel = new ChannelInfo({
-                        channelName: projectName + "#general",
-                        members: membersList,
-                        admin: userName,
-                        requests: [],
-                        type: "private"
-                    });
-
-                    channel.save(function(err, reply) {
-                       let b=[];
-                       b.push(userName);
-                       let channelBot = new ChannelInfo({
-                       channelName: projectName + "#Bob-Bot#"+userName,
-                       members:b,
-                       admin: userName,
-                       requests: [],
-                       type: "private"
-                   });
-
-                    channel.save(function(err, reply) {
-                        lat.save(function(err, reply) {
-                            let members = membersList;
-                            let a = members.indexOf(userName);
-                            members = members.splice(a, 1);
-                            async.each(membersList, function(member, callback) {
-                                UserInfo.findOneAndUpdate({ username: member }, { $push: { channelList: projectName + "#general" } }, function(err, reply) {
-                                    let pn = projectName + "#general";
-                                    let a = "lat." + pn;
-                                    var obj = {};
-                                    obj[a] = new Date();
-                                    LatList.update({ username: member }, { $set: obj }, function(err, reply) {})
-                                });
-                            })
-                            console.log("Channel Saved");
-                        })
-
+        request.get("https://api.github.com/users/"+userName+"/repos").end((err,res)=>{
+            async.each(res.body,function(repos,callback){
+                repositary.push(repos.name);
+                callback();
+            },
+            function(err){
+                var projects = TeamName.filter((value)=>{
+                    return value.includes(':');
                     })
+                    async.each(projects,function(project,callback){
+                    pub.hgetall(project,function(err,result){
+                    console.log(result,"+++++++++++++++++");
+                    // callback();
+                    async.each(Projectmembers,function(member,callback){
+                    console.log(member,"members");
+                    for(key in result){
+                        console.log(key,"key name");
+                        if(key == member){
+                            console.log(key,result[key],"keys in add user");
+                            onUserstatusChangeforProject(projectName,key,result[key],callback);
+                           //break;
+                        }
+                    }
+                    },function(err){
+
+                   })
+                    })
+                  
+                    },function(err){
+                     // sub.subscribe(projectName);
+                    })
+                UserInfo.findOne({ username: userName }, function(err, reply) {
+                    if (reply == null) {
+                        // console.log(avatar, "AAA");
+                        let a = [];
+                        a.push(projectName + "#general");
+                        a.push(projectName + "#Bob-Bot#" + userName);
+                        let user = new UserInfo({
+                            username: userName,
+                            channelList: a,
+                            currentChannel: projectName + "#general",
+                            avatar: avatar,
+                            gitChannelStatus:false,
+                            repos:repositary
+                        });
+                        user.save(function(err, reply) {
+                            let pn = projectName + "#general";
+                            let latob = {};
+                            latob[pn] = new Date();
+                            let lat = new LatList({
+                                username: userName,
+                                lat: latob
+                            });
+                            console.log("Channel Saving");
+                            let channel = new ChannelInfo({
+                                channelName: projectName + "#general",
+                                members: membersList,
+                                admin: userName,
+                                requests: [],
+                                type: "private"
+                            });
+
+                            channel.save(function(err, reply) {
+                                lat.save(function(err, reply) {
+                                    let members = membersList;
+                                    let a = members.indexOf(userName);
+                                    members = members.splice(a, 1);
+                                    async.each(membersList, function(member, callback) {
+                                        UserInfo.findOneAndUpdate({ username: member }, { $push: { channelList: projectName + "#general" } }, function(err, reply) {
+                                            let pn = projectName + "#general";
+                                            let a = "lat." + pn;
+                                            var obj = {};
+                                            obj[a] = new Date();
+                                            LatList.update({ username: member }, { $set: obj }, function(err, reply) {})
+                                        });
+                                    })
+                                    console.log("Channel Saved");
+                                })
+                            })
+
+                            let b=[];
+                                b.push(userName);
+                                b.push('Bob-Bot')
+                            let channelBot = new ChannelInfo({
+                                channelName: projectName + "#Bob-Bot#"+userName,
+                                members:b,
+                                admin: userName,
+                                requests: [],
+                                type: "private"
+                            });
+                            channelBot.save(function(err, reply) {
+                                lat.save(function(err, reply) {
+                                    let members = b;
+                                    let a = members.indexOf(userName);
+                                    members = members.splice(a, 1);
+                                    async.each(b, function(member, callback) {
+                                        UserInfo.findOneAndUpdate({ username: member }, { $push: { channelList: projectName + "#Bob-Bot" } }, function(err, reply) {
+                                            let pn = projectName + "#Bob-Bot";
+                                            let a = "lat." + pn;
+                                            var obj = {};
+                                            obj[a] = new Date();
+                                            LatList.update({ username: member }, { $set: obj }, function(err, reply) {})
+                                        });
+                                    })
+                                    console.log("Channel Saved");
+                                })                        
+                            })
+                        })
+                        console.log("sending added via channel ", "#general"); //sending via system gen channel."general"
+                        let ob = {
+                            newDM: projectName + "#" + "general",
+                            toId: membersList,
+                            lat: new Date()
+                        }
+                        console.log("pushing this object via redis :", ob);
+                        client.publish("general", JSON.stringify(ob)); //published chaaneel name via redis topic.
+                        sub.subscribe(projectName + "#" + "general"); //subscribe the admin
+                    } 
+                    else {
+                        addMembers(userName, projectName + "#general", membersList, "private");
+                        console.log("sending added via channel ", "#general"); //sending via system gen channel."general"
+                        let ob = {
+                            newDM: projectName + "#" + "general",
+                            toId: membersList,
+                            lat: new Date()
+                        }
+                        console.log("pushing this object via redis :", ob);
+                        client.publish("general", JSON.stringify(ob)); //published chaaneel name via redis topic.
+                        sub.subscribe(projectName + "#" + "general"); //subscribe the admin
+                    }
                 })
-                })
-                console.log("sending added via channel ", "#general"); //sending via system gen channel."general"
-                let ob = {
-                    newDM: projectName + "#" + "general",
-                    toId: membersList,
-                    lat: new Date()
-                }
-                console.log("pushing this object via redis :", ob);
-                client.publish("general", JSON.stringify(ob)); //published chaaneel name via redis topic.
-                sub.subscribe(projectName + "#" + "general"); //subscribe the admin
-            } else {
-               addMembers(userName, projectName + "#general", membersList, "private");
-                  console.log("sending added via channel ", "#general"); //sending via system gen channel."general"
-                let ob = {
-                    newDM: projectName + "#" + "general",
-                    toId: membersList,
-                    lat: new Date()
-                }
-                console.log("pushing this object via redis :", ob);
-                client.publish("general", JSON.stringify(ob)); //published chaaneel name via redis topic.
-                sub.subscribe(projectName + "#" + "general"); //subscribe the admin
-            }
+            })
         })
-        })
-})
     })
 
     socket.on("getMembersList", function(channelName) {
@@ -934,91 +1158,32 @@ module.exports = function(io, socket) {
         if(reply!=null){
         console.log(reply.message);
         socket.emit("takeGitHubNotifications",reply.message);
-    }
+        }
       })
     })
   //Gowtham -- GetGitHubNotifications END ---------->
-socket.on("BotMessage",function(sender, channelID, msg){
-    let date = new Date();
-    var syntaxDB = ['c', 'c++', 'c#', 'java', 'javascript', 'python', 'ruby', 'swift', 'go'];
-    console.log("date", date)
-    let obj = {};
-    let oxyReply="";
-    obj = {'sender': sender, 'msg': msg, 'TimeStamp': date } //-and if reached put it to mongoDB. Belowtter write this function again.
-     console.log(obj,"Object---->");
-    pub.publish(channelID, JSON.stringify(obj));
-    pushToRedis(channelID, obj);
-    //console.log(msg);
-    aiclient.textConverse(msg)
-    .then(function(res) {
-    // get the next reply your bot can respond
-    console.log(res.entities,"----");
-    let name=[];
-    if(res.entities.length>0){
-        for( i=0;i<res.entities.length;i++){
-            name.push(res.entities[i].name);
-        }
-    }
-    console.log(name,"Array of Names");
-    //console.log(res.entities[0].name,"Bot's REply");
-    if(res.entities.length==0){
-        //console.log("NULLLL");sea of blue song
-        obj = {'sender': "Bob-Bot", 'msg': "Please give any domain name!!!!!!", 'TimeStamp': date }
-        pub.publish(channelID, JSON.stringify(obj));
-        pushToRedis(channelID, obj);
-    }
-    else if(res.entities[0].name==='wish'){
-        obj = {'sender': "Bob-Bot", 'msg': res.reply(), 'TimeStamp': date }
-        pub.publish(channelID, JSON.stringify(obj));
-        pushToRedis(channelID, obj);
-    }
-    else if(name.includes("concepts")){
-        var a=[];
-        var index=name.indexOf("concepts")
-        let b=res.entities[index].value;
-        console.log(b,"Domain Name");
-        var item = b.toLowerCase().charAt(0).toUpperCase()+b.toLowerCase().substr(1);
-        var language = item.toLowerCase();
-        var concept = 'array';
-        if(syntaxDB.indexOf(language.toLowerCase())>=0){            
-            request.get('https://syntaxdb.com/api/v1/languages/'+language+'/concepts/search?q='+concept+'&fields=syntax&limit=1')
-                .end((err, res) => {
-                    console.log(err, res && res.body)
-                })
-        }
-
-
-        a.push(item);
-        request.post("http://oxygen.blr.stackroute.in/domain/documents/Java").send(
-        {"domainName": item, "reqIntents": [], "reqConcepts": a, "allIntents": ["Learning"]}
-        ).end((req,res)=>{
-        console.log("Success-----Oxygen's Response",res.body);
-      
-        async.each(res.body,function(item,callback){
-            //console.log("Inside async.each");
-        oxyReply+=item.title+" "+item.url+"*#%&%#*";
-        callback();
-    },
-    function(err){
-        console.log("callback");
-        obj = {'sender': "Bob-Bot", 'msg': {
-            url:oxyReply,format:'oxygen'
-        }, 'TimeStamp': date } //-and if reached put it to mongoDB. Better write this function again.
-        pub.publish(channelID, JSON.stringify(obj));
-        pushToRedis(channelID, obj);
-    })
-    })
-    }
-    else{
-        obj = {'sender': "Bob-Bot", 'msg': "Please give any domain name!!!!!!", 'TimeStamp': date }
-          pub.publish(channelID, JSON.stringify(obj));
-           pushToRedis(channelID, obj);
-    }
-    
-  
-  })
-
-
-   })
+    socket.on("BotMessage",function(sender, channelID, msg){
+            let date = new Date();
+            //var syntaxDB = ['c', 'c++', 'c#', 'java', 'javascript', 'python', 'ruby', 'swift', 'go'];
+            //console.log("date", date)
+            let obj = {};
+            obj = {'sender': sender, 'msg': msg, 'TimeStamp': date } //-and if reached put it to mongoDB. Belowtter write this function again.
+            console.log(obj,"Object---->");
+            pub.publish(channelID, JSON.stringify(obj));
+            pushToRedis(channelID, obj);
+            console.log(msg);
+            request.get('localhost:8000/api/bot/nlu/'+msg+'')
+            .end((err, res) => {
+                if(err){
+                    console.log('There is an error while calling nlu bot', err)
+                }
+                else{
+                    //console.log('The reply after calling nlu bot', res)
+                    obj = {'sender': 'Bob-Bot', 'msg': res.body.reply || 'This is embarrasing! Could not complete the request this time.', 'TimeStamp': date }
+                    pub.publish(channelID, JSON.stringify(obj));
+                    pushToRedis(channelID, obj);
+                }
+            })        
+        })
 
 }
